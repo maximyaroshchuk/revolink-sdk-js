@@ -1,0 +1,824 @@
+openapi: 3.1.0
+info:
+  title: Revolink API
+  version: 2.0.0
+  description: |
+    Manage links, tags and domains of a Revolink workspace and read click analytics.
+
+    **Authentication.** Create an API key in Revolink and send it as `Authorization: Bearer <key>`
+    (or `X-Api-Key: <key>`). Every key carries permissions (scopes); an endpoint answers `403` when its scope is missing.
+
+    **Workspace.** Send the workspace in the `X-Workspace-Id` header (the key's owner must be a member of it).
+
+    **Responses.** Success: `{ "data": ... }`; lists add `pagination`. Errors: `{ "error": { "code", "message" } }`
+    with a matching HTTP status. Limits of the plan answer `403` with `error.licenseLimitReached: true`.
+    Requests are limited to 300 per minute per key (`429`, `Retry-After`).
+servers:
+  - url: https://api.revolink.link/apiv2
+    description: Production
+security:
+  - bearerAuth: []
+    workspace: []
+tags:
+  - name: Links
+  - name: Analytics
+  - name: Tags
+  - name: Domains
+  - name: Account
+
+paths:
+  /me:
+    get:
+      tags: [Account]
+      operationId: getMe
+      summary: Who the key acts as
+      description: Returns the user, the workspace and the permissions of the key. Needs any valid key.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/Me'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links:
+    get:
+      tags: [Links]
+      operationId: listLinks
+      summary: List links
+      description: Needs `links:read`.
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: search, in: query, description: Substring of the name, slug or description., schema: {type: string}}
+        - {name: domain, in: query, description: Short domain; several separated by commas., schema: {type: string}}
+        - {name: active, in: query, schema: {type: boolean}}
+        - {name: tagIds, in: query, description: Tag ids separated by commas., schema: {type: string}}
+        - {name: sortBy, in: query, schema: {type: string, enum: [name, description, shortLink, clicks, active, createdAt], default: createdAt}}
+        - {name: order, in: query, schema: {type: string, enum: [asc, desc], default: desc}}
+        - {name: rql, in: query, description: Revolink query language filter., schema: {type: string}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/LinkSummary'}
+                  pagination: {$ref: '#/components/schemas/Pagination'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [Links]
+      operationId: createLink
+      summary: Create a link
+      description: |
+        Needs `links:write`. Pass `url` for a link with one destination, or `rules` for smart routing
+        (exactly one default rule). `name` defaults to the host of the destination.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LinkCreate'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [Links]
+      operationId: upsertLink
+      summary: Create or update a link by its short address
+      description: |
+        Needs `links:write`. `slug` is required. When a link with this `slug` on this `domain`
+        (default `rvlnk.link`) exists it is updated (its slug and domain stay), otherwise it is created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/LinkCreate'}
+                - type: object
+                  required: [slug]
+      responses:
+        '200':
+          description: The existing link was updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkResponse'}
+        '201':
+          description: A new link was created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links/bulk:
+    post:
+      tags: [Links]
+      operationId: createLinks
+      summary: Create up to 100 links
+      description: Needs `links:bulk`. One failed item does not stop the others.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [links]
+              properties:
+                links:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: {$ref: '#/components/schemas/LinkCreate'}
+      responses:
+        '200':
+          description: Per-item result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [created, failed]
+                    properties:
+                      created:
+                        type: array
+                        items: {$ref: '#/components/schemas/BulkCreatedItem'}
+                      failed:
+                        type: array
+                        items: {$ref: '#/components/schemas/BulkFailedItem'}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [Links]
+      operationId: updateLinks
+      summary: Update up to 100 links
+      description: Needs `links:bulk`. Each item is an `id` plus the fields to change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [updates]
+              properties:
+                updates:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    allOf:
+                      - {$ref: '#/components/schemas/LinkUpdate'}
+                      - type: object
+                        required: [id]
+                        properties:
+                          id: {type: string}
+      responses:
+        '200':
+          description: Per-item result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [updated, failed]
+                    properties:
+                      updated:
+                        type: array
+                        items:
+                          type: object
+                          required: [id]
+                          properties:
+                            id: {type: string}
+                            name: {type: string}
+                            slug: {type: string}
+                            domain: {type: string}
+                      failed:
+                        type: array
+                        items: {$ref: '#/components/schemas/BulkFailedItem'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Links]
+      operationId: deleteLinks
+      summary: Delete up to 100 links
+      description: Needs `links:bulk`. Permanent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: {type: string}
+      responses:
+        '200':
+          description: Per-item result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [deleted, failed]
+                    properties:
+                      deleted:
+                        type: array
+                        items:
+                          type: object
+                          required: [id]
+                          properties:
+                            id: {type: string}
+                            slug: {type: string}
+                            domain: {type: string}
+                      failed:
+                        type: array
+                        items: {$ref: '#/components/schemas/BulkFailedItem'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Links]
+      operationId: getLink
+      summary: Get a link
+      description: Needs `links:read`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [Links]
+      operationId: updateLink
+      summary: Update a link
+      description: |
+        Needs `links:write`. Send only what changes. `url` replaces the destination of the default rule;
+        `rules`, when sent, replace ALL rules (keep the `id` of rules you want to keep, it preserves their statistics).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LinkUpdate'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Links]
+      operationId: deleteLink
+      summary: Delete a link
+      description: Needs `links:delete`. Permanent.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IdResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links/{id}/analytics:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Analytics]
+      operationId: getLinkAnalytics
+      summary: Click analytics of a link
+      description: Needs `analytics:read`. Earliest available date is 2025-01-01.
+      parameters:
+        - {$ref: '#/components/parameters/From'}
+        - {$ref: '#/components/parameters/To'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalyticsResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /analytics:
+    get:
+      tags: [Analytics]
+      operationId: getWorkspaceAnalytics
+      summary: Click analytics of the whole workspace
+      description: Needs `analytics:read`. Earliest available date is 2025-01-01.
+      parameters:
+        - {$ref: '#/components/parameters/From'}
+        - {$ref: '#/components/parameters/To'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalyticsResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /tags:
+    get:
+      tags: [Tags]
+      operationId: listTags
+      summary: List tags
+      description: Needs `tags:read`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Tag'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [Tags]
+      operationId: createTag
+      summary: Create a tag
+      description: Needs `tags:write`. `409` when a tag with this name exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TagCreate'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TagResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /tags/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Tags]
+      operationId: getTag
+      summary: Get a tag
+      description: Needs `tags:read`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TagResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [Tags]
+      operationId: updateTag
+      summary: Update a tag
+      description: Needs `tags:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TagUpdate'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TagResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Tags]
+      operationId: deleteTag
+      summary: Delete a tag
+      description: Needs `tags:delete`. The tag is removed from all links.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IdResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /domains:
+    get:
+      tags: [Domains]
+      operationId: listDomains
+      summary: List custom domains
+      description: Needs `domains:read`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Domain'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [Domains]
+      operationId: createDomain
+      summary: Add a custom domain
+      description: |
+        Needs `domains:write`. The domain starts as `pending`; point DNS as described in `verification`
+        and it becomes `verified`. Adding a domain the workspace already has returns it with `200`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain: {type: string, examples: [go.example.com]}
+      responses:
+        '200':
+          description: The workspace already had this domain
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DomainResponse'}
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DomainResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /domains/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Domains]
+      operationId: getDomain
+      summary: Get a domain
+      description: Needs `domains:read`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DomainResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Domains]
+      operationId: deleteDomain
+      summary: Delete a domain
+      description: Needs `domains:delete`.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IdResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A Revolink API key. `X-Api-Key` is accepted as well.
+    workspace:
+      type: apiKey
+      in: header
+      name: X-Workspace-Id
+      description: Id of the workspace the request works in.
+
+  parameters:
+    From:
+      name: from
+      in: query
+      required: true
+      description: First day, YYYY-MM-DD.
+      schema: {type: string, format: date}
+    To:
+      name: to
+      in: query
+      description: Last day, YYYY-MM-DD. Defaults to today.
+      schema: {type: string, format: date}
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [invalid_request, unauthorized, forbidden, not_found, conflict, rate_limited, license_limit_reached, internal_error, error]
+            message: {type: string}
+            licenseLimitReached: {type: boolean}
+            licenseExpired: {type: boolean}
+            requiredPermission: {type: string}
+          additionalProperties: true
+
+    Pagination:
+      type: object
+      required: [page, limit, total]
+      properties:
+        page: {type: integer}
+        limit: {type: integer}
+        total: {type: integer}
+
+    IdResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id]
+          properties:
+            id: {type: string}
+
+    Me:
+      type: object
+      required: [user, workspace, permissions]
+      properties:
+        user:
+          type: object
+          required: [id]
+          properties:
+            id: {type: string}
+            email: {type: string}
+            fullname: {type: string}
+        workspace:
+          type: object
+          required: [id]
+          properties:
+            id: {type: string}
+            name: {type: [string, 'null']}
+            slug: {type: [string, 'null']}
+        permissions:
+          type: array
+          items: {type: string}
+
+    Rule:
+      type: object
+      required: [targetUrl, isDefault]
+      properties:
+        id: {type: string, description: Keep it when updating a rule to preserve its statistics.}
+        name: {type: string}
+        targetUrl: {type: string, format: uri}
+        isDefault: {type: boolean, description: Exactly one rule is the default; it has no conditions.}
+        country: {type: array, items: {type: string, minLength: 2, maxLength: 2}, description: ISO 3166-1 alpha-2 codes.}
+        region: {type: array, items: {type: string}}
+        city: {type: array, items: {type: string}}
+        device: {type: array, items: {type: string, enum: [desktop, mobile, tablet, console, smarttv, wearable, embedded]}}
+        os: {type: array, items: {type: string, enum: [Windows, macOS, Linux, iOS, Android]}}
+        browser: {type: array, items: {type: string, enum: [Chrome, Firefox, Safari, Edge, Opera, Brave]}}
+        timeStart: {type: string, pattern: '^\d{2}:\d{2}$', description: HH:MM UTC.}
+        timeEnd: {type: string, pattern: '^\d{2}:\d{2}$', description: HH:MM UTC.}
+        daysOfWeek: {type: array, items: {type: integer, minimum: 0, maximum: 6}, description: 0 = Sunday.}
+        locale: {type: array, items: {type: string}}
+        password: {type: string, description: Write-only. Plain text; stored encrypted.}
+        useDefaultPassword: {type: boolean}
+
+    RuleView:
+      allOf:
+        - $ref: '#/components/schemas/Rule'
+        - type: object
+          required: [passwordProtected]
+          properties:
+            passwordProtected: {type: boolean}
+
+    AbTest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: {type: boolean}
+        variants:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [url, weight]
+            properties:
+              id: {type: string}
+              url: {type: string, format: uri}
+              weight: {type: number, exclusiveMinimum: 0}
+
+    LinkFields:
+      type: object
+      properties:
+        name: {type: string, maxLength: 255}
+        slug: {type: string, maxLength: 100, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', description: Generated when omitted.}
+        domain: {type: string, description: 'Short domain: `rvlnk.link` (default) or a verified domain of the workspace.'}
+        description: {type: string, maxLength: 1000}
+        active: {type: boolean}
+        abTest: {$ref: '#/components/schemas/AbTest'}
+        tagIds: {type: array, items: {type: string}, description: The FULL tag list. Empty array removes all tags.}
+        clicksLimit: {type: integer, minimum: 1}
+        expirationDate: {type: string, format: date-time}
+        expiredUrl: {type: string, format: uri, maxLength: 2000, description: Where visitors go after the link expired.}
+        conversionTracking: {type: boolean}
+        gpsTracking: {type: boolean}
+        shareStats: {type: boolean}
+        ogTitle: {type: string, maxLength: 255}
+        ogDescription: {type: string, maxLength: 500}
+        appearanceColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        useSystemColor: {type: boolean}
+        useWorkspaceColor: {type: boolean}
+        qrColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        qrBgColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        qrShowLogo: {type: boolean}
+
+    LinkCreate:
+      allOf:
+        - $ref: '#/components/schemas/LinkFields'
+        - type: object
+          properties:
+            url: {type: string, format: uri, description: 'Destination. Use instead of `rules` for a link with one destination.'}
+            rules:
+              type: array
+              minItems: 1
+              items: {$ref: '#/components/schemas/Rule'}
+
+    LinkUpdate:
+      allOf:
+        - $ref: '#/components/schemas/LinkFields'
+        - type: object
+          properties:
+            url: {type: string, format: uri, description: Replaces the destination of the default rule.}
+            rules:
+              type: array
+              minItems: 1
+              items: {$ref: '#/components/schemas/Rule'}
+
+    Link:
+      type: object
+      required: [id, name, domain, slug, shortLink, active, clicks, rules, abTest, tagIds]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        domain: {type: string}
+        slug: {type: string}
+        shortLink: {type: string, format: uri}
+        url: {type: [string, 'null'], description: Destination of the default rule.}
+        active: {type: boolean}
+        clicks: {type: integer}
+        clicksLimit: {type: [integer, 'null']}
+        expirationDate: {type: [string, 'null']}
+        expiredUrl: {type: [string, 'null']}
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/RuleView'}
+        abTest:
+          type: object
+          required: [enabled, variants]
+          properties:
+            enabled: {type: boolean}
+            variants: {type: array, items: {type: object}}
+        tagIds: {type: array, items: {type: string}}
+        conversionTracking: {type: boolean}
+        gpsTracking: {type: boolean}
+        shareStats: {type: boolean}
+        createdAt: {type: [string, 'null']}
+        updatedAt: {type: [string, 'null']}
+
+    LinkSummary:
+      type: object
+      required: [id, name, domain, slug, shortLink, active, clicks, tags]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        domain: {type: string}
+        slug: {type: string}
+        shortLink: {type: string, format: uri}
+        active: {type: boolean}
+        clicks: {type: integer}
+        tags:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: {type: string}
+              color: {type: [string, 'null']}
+              icon: {type: [string, 'null']}
+        createdAt: {type: [string, 'null']}
+
+    LinkResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/Link'}
+
+    BulkCreatedItem:
+      type: object
+      required: [id, slug, shortLink]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        slug: {type: string}
+        shortLink: {type: string}
+
+    BulkFailedItem:
+      type: object
+      required: [error]
+      properties:
+        index: {type: integer, description: Position in the request array (create).}
+        id: {type: string, description: Link id (update, delete).}
+        error: {type: string}
+
+    AnalyticsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: Click statistics for the period (totals and breakdowns by country, region, city, device, browser, OS, referrer, rule, A/B variant).
+          additionalProperties: true
+
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        color: {type: [string, 'null']}
+        icon: {type: [string, 'null']}
+        createdAt: {type: [string, 'null']}
+        updatedAt: {type: [string, 'null']}
+
+    TagCreate:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        color: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        icon: {type: string}
+
+    TagUpdate:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        color: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        icon: {type: string}
+
+    TagResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/Tag'}
+
+    Domain:
+      type: object
+      required: [id, domain, status]
+      properties:
+        id: {type: string}
+        domain: {type: string}
+        status: {type: string, enum: [pending, verified]}
+        verification:
+          type: [object, 'null']
+          description: The DNS record to create.
+          properties:
+            type: {type: string}
+            host: {type: string}
+            value: {type: string}
+            verifiedAt: {type: [string, 'null']}
+        createdAt: {type: [string, 'null']}
+
+    DomainResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/Domain'}

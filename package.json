@@ -1,0 +1,56 @@
+{
+  "name": "revolink",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for the Revolink API: links, tags, domains and analytics.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "revolink",
+    "link shortener",
+    "short links",
+    "url shortener",
+    "api",
+    "sdk"
+  ],
+  "scripts": {
+    "sync-spec": "node scripts/sync-spec.mjs",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/schema.ts",
+    "build": "npm run generate && tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "openapi-typescript": "^7.4.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "yaml": "^2.6.0"
+  }
+}
