@@ -443,6 +443,8 @@ export interface components {
             /** @description Link id (update */
             id?: string;
             error: string;
+            /** @description The same codes as an error response, e.g. `conflict` or `license_limit_reached`. */
+            code?: string;
         };
         AnalyticsResponse: {
             /** @description Click statistics for the period (totals and breakdowns by country, region, city, device, browser, OS, referrer, rule, A/B variant). */

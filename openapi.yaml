@@ -758,6 +758,7 @@ components:
         index: {type: integer, description: Position in the request array (create).}
         id: {type: string, description: Link id (update, delete).}
         error: {type: string}
+        code: {type: string, description: 'The same codes as an error response, e.g. `conflict` or `license_limit_reached`.'}
 
     AnalyticsResponse:
       type: object
