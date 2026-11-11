@@ -6,6 +6,9 @@ import type {
 
 const MAX_PAGE_SIZE = 200;
 const enc = encodeURIComponent;
+// With the header, the server refuses (409 `conflict_modified`) when the link changed after that moment.
+const ifUnmodified = (options: {ifUnmodifiedSince?: string}) =>
+    options.ifUnmodifiedSince ? {'If-Unmodified-Since': options.ifUnmodifiedSince} : undefined;
 
 export class Links {
     constructor(private readonly http: HttpClient) {}
@@ -16,8 +19,9 @@ export class Links {
      * @example
      * const {shortLink} = await revolink.links.create({url: 'https://example.com'});
      */
-    async create(input: LinkCreate): Promise<Link> {
-        return (await this.http.request<{data: Link}>('POST', '/links', {body: input})).data;
+    async create(input: LinkCreate, options: {idempotencyKey?: string} = {}): Promise<Link> {
+        const headers = options.idempotencyKey ? {'Idempotency-Key': options.idempotencyKey} : undefined;
+        return (await this.http.request<{data: Link}>('POST', '/links', {body: input, headers})).data;
     }
 
     /** Creates the link, or updates the one that already has this `slug` on this `domain`. Needs `links:write`. */
@@ -53,13 +57,13 @@ export class Links {
     }
 
     /** Send only what changes. `url` replaces the destination of the default rule. Needs `links:write`. */
-    async update(id: string, input: LinkUpdate): Promise<Link> {
-        return (await this.http.request<{data: Link}>('PATCH', `/links/${enc(id)}`, {body: input})).data;
+    async update(id: string, input: LinkUpdate, options: {ifUnmodifiedSince?: string} = {}): Promise<Link> {
+        return (await this.http.request<{data: Link}>('PATCH', `/links/${enc(id)}`, {body: input, headers: ifUnmodified(options)})).data;
     }
 
     /** Permanent. Needs `links:delete`. */
-    async delete(id: string): Promise<{id: string}> {
-        return (await this.http.request<{data: {id: string}}>('DELETE', `/links/${enc(id)}`)).data;
+    async delete(id: string, options: {ifUnmodifiedSince?: string} = {}): Promise<{id: string}> {
+        return (await this.http.request<{data: {id: string}}>('DELETE', `/links/${enc(id)}`, {headers: ifUnmodified(options)})).data;
     }
 
     /** Change history of a link, newest first. Needs `links:read` and a plan that includes the history. */

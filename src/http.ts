@@ -28,6 +28,8 @@ export interface RequestOptions {
     body?: unknown;
     /** A multipart upload. The Content-Type (with its boundary) is set by `fetch`, never by us. */
     form?: FormData;
+    /** Extra request headers (e.g. `Idempotency-Key`). */
+    headers?: Record<string, string>;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -72,6 +74,7 @@ export class HttpClient {
                 Authorization: `Bearer ${this.apiKey}`,
                 ...(this.workspaceId ? {'X-Workspace-Id': this.workspaceId} : {}),
                 Accept: 'application/json',
+                ...options.headers,
                 ...(options.body !== undefined && !options.form ? {'Content-Type': 'application/json'} : {}),
             },
             body: options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
