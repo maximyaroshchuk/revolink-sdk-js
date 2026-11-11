@@ -995,6 +995,7 @@ components:
         conversionTracking: {type: boolean}
         gpsTracking: {type: boolean}
         shareStats: {type: boolean}
+        ownerId: {type: [string, 'null'], description: Id of the user who created the link.}
         ogTitle: {type: [string, 'null']}
         ogDescription: {type: [string, 'null']}
         ogImage: {type: [string, 'null'], description: URL of the social preview image.}

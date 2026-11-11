@@ -652,6 +652,8 @@ export interface components {
             conversionTracking?: boolean;
             gpsTracking?: boolean;
             shareStats?: boolean;
+            /** @description Id of the user who created the link. */
+            ownerId?: string | null;
             ogTitle?: string | null;
             ogDescription?: string | null;
             /** @description URL of the social preview image. */
