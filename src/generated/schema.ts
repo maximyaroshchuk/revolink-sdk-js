@@ -66,6 +66,10 @@ export interface paths {
          * Create a link
          * @description Needs `links:write`. Pass `url` for a link with one destination, or `rules` for smart routing
          *     (exactly one default rule). `name` defaults to the host of the destination.
+         *
+         *     **Safe retries.** Send an `Idempotency-Key` (up to 100 characters, kept for 24 hours). Repeating a request with
+         *     the same key returns the link the first request created, with `200` instead of `201`, and takes no quota twice.
+         *     A failed attempt does not use up the key.
          */
         post: operations["createLink"];
         delete?: never;
@@ -120,7 +124,8 @@ export interface paths {
         post?: never;
         /**
          * Delete a link
-         * @description Needs `links:delete`. Permanent.
+         * @description Needs `links:delete`. Permanent. `If-Unmodified-Since` works as on update: a link changed after that moment is
+         *     not deleted and the answer is `409` with `error.code = "conflict_modified"`.
          */
         delete: operations["deleteLink"];
         options?: never;
@@ -129,6 +134,10 @@ export interface paths {
          * Update a link
          * @description Needs `links:write`. Send only what changes. `url` replaces the destination of the default rule;
          *     `rules`, when sent, replace ALL rules (keep the `id` of rules you want to keep, it preserves their statistics).
+         *
+         *     **Conflicts.** Send `If-Unmodified-Since` with the link's `updatedAt` to avoid overwriting a change made
+         *     elsewhere: when the link changed after that moment the answer is `409` with `error.code = "conflict_modified"` and the
+         *     current link in `error.current`. Without the header the update always applies.
          */
         patch: operations["updateLink"];
         trace?: never;
@@ -761,6 +770,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Up to 100 characters. The same key returns the originally created link instead of creating a duplicate. */
+        IdempotencyKey: string;
+        /** @description ISO 8601 time, normally the link's `updatedAt`. A link changed after it answers 409 `conflict_modified`. */
+        IfUnmodifiedSince: string;
         /** @description First day, YYYY-MM-DD. */
         From: string;
         /** @description Last day, YYYY-MM-DD. Defaults to today. */
@@ -893,7 +906,10 @@ export interface operations {
     createLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Up to 100 characters. The same key returns the originally created link instead of creating a duplicate. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1048,7 +1064,10 @@ export interface operations {
     deleteLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ISO 8601 time, normally the link's `updatedAt`. A link changed after it answers 409 `conflict_modified`. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSince"];
+            };
             path: {
                 id: string;
             };
@@ -1071,7 +1090,10 @@ export interface operations {
     updateLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ISO 8601 time, normally the link's `updatedAt`. A link changed after it answers 409 `conflict_modified`. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSince"];
+            };
             path: {
                 id: string;
             };

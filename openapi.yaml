@@ -104,6 +104,12 @@ paths:
       description: |
         Needs `links:write`. Pass `url` for a link with one destination, or `rules` for smart routing
         (exactly one default rule). `name` defaults to the host of the destination.
+
+        **Safe retries.** Send an `Idempotency-Key` (up to 100 characters, kept for 24 hours). Repeating a request with
+        the same key returns the link the first request created, with `200` instead of `201`, and takes no quota twice.
+        A failed attempt does not use up the key.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody:
         required: true
         content:
@@ -302,6 +308,12 @@ paths:
       description: |
         Needs `links:write`. Send only what changes. `url` replaces the destination of the default rule;
         `rules`, when sent, replace ALL rules (keep the `id` of rules you want to keep, it preserves their statistics).
+
+        **Conflicts.** Send `If-Unmodified-Since` with the link's `updatedAt` to avoid overwriting a change made
+        elsewhere: when the link changed after that moment the answer is `409` with `error.code = "conflict_modified"` and the
+        current link in `error.current`. Without the header the update always applies.
+      parameters:
+        - {$ref: '#/components/parameters/IfUnmodifiedSince'}
       requestBody:
         required: true
         content:
@@ -318,7 +330,11 @@ paths:
       tags: [Links]
       operationId: deleteLink
       summary: Delete a link
-      description: Needs `links:delete`. Permanent.
+      description: |
+        Needs `links:delete`. Permanent. `If-Unmodified-Since` works as on update: a link changed after that moment is
+        not deleted and the answer is `409` with `error.code = "conflict_modified"`.
+      parameters:
+        - {$ref: '#/components/parameters/IfUnmodifiedSince'}
       responses:
         '200':
           description: Deleted
@@ -696,6 +712,16 @@ components:
       description: Id of the workspace the request works in.
 
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: Up to 100 characters. The same key returns the originally created link instead of creating a duplicate.
+      schema: {type: string, maxLength: 100}
+    IfUnmodifiedSince:
+      name: If-Unmodified-Since
+      in: header
+      description: ISO 8601 time, normally the link's `updatedAt`. A link changed after it answers 409 `conflict_modified`.
+      schema: {type: string, format: date-time}
     From:
       name: from
       in: query
