@@ -539,14 +539,14 @@ export interface components {
             device?: ("desktop" | "mobile" | "tablet" | "console" | "smarttv" | "wearable" | "embedded")[];
             os?: ("Windows" | "macOS" | "Linux" | "iOS" | "Android")[];
             browser?: ("Chrome" | "Firefox" | "Safari" | "Edge" | "Opera" | "Brave")[];
-            /** @description HH:MM UTC. */
+            /** @description HH:MM on the visitor's clock (the visitor's own time zone, not UTC). With `timeEnd`; a window that crosses midnight (start later than end) is allowed. */
             timeStart?: string;
-            /** @description HH:MM UTC. */
+            /** @description HH:MM on the visitor's clock, see `timeStart`. */
             timeEnd?: string;
             /** @description 0 = Sunday. */
             daysOfWeek?: number[];
             locale?: string[];
-            /** @description Write-only. Plain text; stored encrypted. */
+            /** @description Write-only. Plain text; stored encrypted. Send an empty string to remove the password. When you send a rule back as you read it (`passwordProtected: true`) without `password`, the stored password is kept. */
             password?: string;
             useDefaultPassword?: boolean;
         };

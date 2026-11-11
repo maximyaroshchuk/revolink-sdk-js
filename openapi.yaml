@@ -877,11 +877,11 @@ components:
         device: {type: array, items: {type: string, enum: [desktop, mobile, tablet, console, smarttv, wearable, embedded]}}
         os: {type: array, items: {type: string, enum: [Windows, macOS, Linux, iOS, Android]}}
         browser: {type: array, items: {type: string, enum: [Chrome, Firefox, Safari, Edge, Opera, Brave]}}
-        timeStart: {type: string, pattern: '^\d{2}:\d{2}$', description: HH:MM UTC.}
-        timeEnd: {type: string, pattern: '^\d{2}:\d{2}$', description: HH:MM UTC.}
+        timeStart: {type: string, pattern: '^\d{2}:\d{2}$', description: 'HH:MM on the visitor''s clock (the visitor''s own time zone, not UTC). With `timeEnd`; a window that crosses midnight (start later than end) is allowed.'}
+        timeEnd: {type: string, pattern: '^\d{2}:\d{2}$', description: 'HH:MM on the visitor''s clock, see `timeStart`.'}
         daysOfWeek: {type: array, items: {type: integer, minimum: 0, maximum: 6}, description: 0 = Sunday.}
         locale: {type: array, items: {type: string}}
-        password: {type: string, description: Write-only. Plain text; stored encrypted.}
+        password: {type: string, description: 'Write-only. Plain text; stored encrypted. Send an empty string to remove the password. When you send a rule back as you read it (`passwordProtected: true`) without `password`, the stored password is kept.'}
         useDefaultPassword: {type: boolean}
 
     RuleView:
