@@ -45,6 +45,28 @@ paths:
                   data: {$ref: '#/components/schemas/Me'}
         default: {$ref: '#/components/responses/Error'}
 
+  /workspaces:
+    get:
+      tags: [Account]
+      operationId: listWorkspaces
+      summary: Workspaces of the key's user
+      description: Every workspace the user owns or is a member of. Needs any valid key; `X-Workspace-Id` is not required here.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Workspace'}
+        default: {$ref: '#/components/responses/Error'}
+
   /links:
     get:
       tags: [Links]
@@ -588,6 +610,32 @@ components:
         permissions:
           type: array
           items: {type: string}
+        role:
+          type: [string, 'null']
+          description: "`owner` for the workspace owner, otherwise the member's role id."
+        workspacePermissions:
+          type: object
+          description: What the role may do in the workspace (the same flags the web app uses). The owner may do everything.
+          additionalProperties: {type: boolean}
+        license:
+          type: object
+          description: The plan of the workspace owner — limits never come from the acting member.
+          properties:
+            planName: {type: [string, 'null']}
+            expiresAt: {type: [string, 'null'], format: date-time}
+            limits: {type: object, additionalProperties: true}
+            usage: {type: object, additionalProperties: true}
+
+    Workspace:
+      type: object
+      required: [id, name, slug, role, isOwner, appearanceColor]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        slug: {type: [string, 'null']}
+        role: {type: [string, 'null'], description: "`owner` for the owner, otherwise the member's role id."}
+        isOwner: {type: boolean}
+        appearanceColor: {type: string}
 
     Rule:
       type: object
@@ -734,7 +782,10 @@ components:
               name: {type: string}
               color: {type: [string, 'null']}
               icon: {type: [string, 'null']}
+        url: {type: [string, 'null'], description: Destination of the default rule.}
+        expirationDate: {type: [string, 'null']}
         createdAt: {type: [string, 'null']}
+        updatedAt: {type: [string, 'null']}
 
     LinkResponse:
       type: object

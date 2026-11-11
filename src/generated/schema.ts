@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspaces of the key's user
+         * @description Every workspace the user owns or is a member of. Needs any valid key; `X-Workspace-Id` is not required here.
+         */
+        get: operations["listWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/links": {
         parameters: {
             query?: never;
@@ -298,6 +318,33 @@ export interface components {
                 slug?: string | null;
             };
             permissions: string[];
+            /** @description `owner` for the workspace owner, otherwise the member's role id. */
+            role?: string | null;
+            /** @description What the role may do in the workspace (the same flags the web app uses). The owner may do everything. */
+            workspacePermissions?: {
+                [key: string]: boolean;
+            };
+            /** @description The plan of the workspace owner — limits never come from the acting member. */
+            license?: {
+                planName?: string | null;
+                /** Format: date-time */
+                expiresAt?: string | null;
+                limits?: {
+                    [key: string]: unknown;
+                };
+                usage?: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        Workspace: {
+            id: string;
+            name: string;
+            slug: string | null;
+            /** @description `owner` for the owner, otherwise the member's role id. */
+            role: string | null;
+            isOwner: boolean;
+            appearanceColor: string;
         };
         Rule: {
             /** @description Keep it when updating a rule to preserve its statistics. */
@@ -426,7 +473,11 @@ export interface components {
                 color?: string | null;
                 icon?: string | null;
             }[];
+            /** @description Destination of the default rule. */
+            url?: string | null;
+            expirationDate?: string | null;
             createdAt?: string | null;
+            updatedAt?: string | null;
         };
         LinkResponse: {
             data: components["schemas"]["Link"];
@@ -531,6 +582,29 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["Me"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Workspace"][];
                     };
                 };
             };

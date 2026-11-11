@@ -14,6 +14,7 @@ export type TagCreate = Schemas['TagCreate'];
 export type TagUpdate = Schemas['TagUpdate'];
 export type Domain = Schemas['Domain'];
 export type Me = Schemas['Me'];
+export type Workspace = Schemas['Workspace'];
 export type Pagination = Schemas['Pagination'];
 export type BulkCreatedItem = Schemas['BulkCreatedItem'];
 export type BulkFailedItem = Schemas['BulkFailedItem'];

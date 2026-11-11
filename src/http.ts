@@ -42,15 +42,16 @@ const buildQuery = (query?: Record<string, QueryValue>) => {
 
 export class HttpClient {
     private readonly apiKey: string;
-    private readonly workspaceId: string;
+    private readonly workspaceId?: string;
     private readonly baseUrl: string;
     private readonly timeout: number;
     private readonly maxRetries: number;
     private readonly fetchImpl: typeof fetch;
 
-    constructor(options: RevolinkOptions) {
+    /** `requireWorkspace: false` is for the one call that happens before a workspace is chosen (listing them). */
+    constructor(options: Omit<RevolinkOptions, 'workspaceId'> & {workspaceId?: string}, requireWorkspace = true) {
         if (!options?.apiKey) throw new RevolinkConfigError('apiKey is required.');
-        if (!options.workspaceId) throw new RevolinkConfigError('workspaceId is required.');
+        if (requireWorkspace && !options.workspaceId) throw new RevolinkConfigError('workspaceId is required.');
         this.apiKey = options.apiKey;
         this.workspaceId = options.workspaceId;
         this.baseUrl = (options.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
@@ -67,7 +68,7 @@ export class HttpClient {
             method,
             headers: {
                 Authorization: `Bearer ${this.apiKey}`,
-                'X-Workspace-Id': this.workspaceId,
+                ...(this.workspaceId ? {'X-Workspace-Id': this.workspaceId} : {}),
                 Accept: 'application/json',
                 ...(options.body !== undefined ? {'Content-Type': 'application/json'} : {}),
             },

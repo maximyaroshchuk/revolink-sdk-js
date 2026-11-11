@@ -47,6 +47,20 @@ describe('setup', () => {
         expect(calls[0]!.headers).toMatchObject({Authorization: 'Bearer rk_test', 'X-Workspace-Id': 'ws1'});
     });
 
+    it('lists workspaces without a workspace header', async () => {
+        const ws = {id: 'ws1', name: 'Acme', slug: 'acme', role: 'owner', isOwner: true, appearanceColor: '#0172FF'};
+        const calls: Call[] = [];
+        const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+            calls.push({url, method: init.method || 'GET', headers: init.headers as Record<string, string>});
+            return json(200, {data: [ws]});
+        });
+        const result = await Revolink.listWorkspaces({apiKey: 'rvm_x', baseUrl: 'https://api.test/apiv2', fetch: fetchMock as unknown as typeof fetch});
+        expect(result).toEqual([ws]);
+        expect(calls[0]).toMatchObject({url: 'https://api.test/apiv2/workspaces', method: 'GET'});
+        expect(calls[0]!.headers).toMatchObject({Authorization: 'Bearer rvm_x'});
+        expect(calls[0]!.headers['X-Workspace-Id']).toBeUndefined();
+    });
+
     it('trims a trailing slash of baseUrl', async () => {
         const {revolink, calls} = setup([json(200, {data: []})], {baseUrl: 'https://api.test/apiv2///'});
         await revolink.tags.list();
