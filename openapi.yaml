@@ -346,6 +346,168 @@ paths:
               schema: {$ref: '#/components/schemas/AnalyticsResponse'}
         default: {$ref: '#/components/responses/Error'}
 
+  /files:
+    post:
+      tags: [Links]
+      operationId: uploadFile
+      summary: Upload an image
+      description: |
+        Needs `links:write`. One image (PNG, JPEG, GIF or HEIC, up to 10 MB), sent as `multipart/form-data` in the
+        `file` field. Returns the URL to use as `ogImage` or `qrSettings.logo`. The type is checked from the file's
+        contents. An image that is not attached to a link or workspace is removed by the daily cleanup, as on the web.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '200':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: {type: string, format: uri}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links/{id}/activity:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Links]
+      operationId: getLinkActivity
+      summary: Change history of a link
+      description: Needs `links:read`, a role that may view the history, and a plan that includes the change history. Newest first.
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Activity'}
+                  pagination: {$ref: '#/components/schemas/Pagination'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /templates:
+    get:
+      tags: [Links]
+      operationId: listTemplates
+      summary: Saved templates of the workspace
+      description: |
+        Needs `links:read`. Only `type=utm` is supported: the workspace's UTM templates.
+
+        **How UTM values reach a link.** A UTM template's `content` holds values for `source`, `medium`, `campaign`,
+        `term`, `content`, `referral` and any custom names. Applying a template to a rule (or an A/B variant) rewrites its
+        destination URL: all existing `utm_*` parameters are removed, then every non-empty value is added as
+        `utm_<name>=<value>` (URL-encoded) to the query string. When the URL has a `#fragment`, the parameters are
+        appended to the fragment instead (`#section?utm_source=…`). Send the resulting URL as the rule's `targetUrl`
+        (or the variant's `url`).
+      parameters:
+        - {name: type, in: query, required: true, schema: {type: string, enum: [utm]}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Template'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /links/{id}/shares:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [Links]
+      operationId: listShares
+      summary: Public statistics pages of a link
+      description: Needs `links:read` and a role that may view public statistics.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Share'}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [Links]
+      operationId: createShare
+      summary: Create a public statistics page
+      description: Needs `links:write`. At least one graph must be enabled; rule and A/B breakdowns need a plan that includes them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ShareInput'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ShareResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /shares/{shareId}:
+    parameters:
+      - {name: shareId, in: path, required: true, schema: {type: string}}
+    patch:
+      tags: [Links]
+      operationId: updateShare
+      summary: Change a public statistics page
+      description: Needs `links:write`. Send `name` and/or `enabledGraphs`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ShareInput'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ShareResponse'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [Links]
+      operationId: deleteShare
+      summary: Delete a public statistics page
+      description: Needs `links:write`. The public URL stops working.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IdResponse'}
+        default: {$ref: '#/components/responses/Error'}
+
   /analytics:
     get:
       tags: [Analytics]
@@ -579,6 +741,70 @@ components:
         limit: {type: integer}
         total: {type: integer}
 
+    Activity:
+      type: object
+      required: [id, action, user]
+      properties:
+        id: {type: string}
+        action: {type: string, description: 'What happened, e.g. `link_created`, `link_updated`, `public_share_created`.'}
+        subject: {type: [string, 'null']}
+        changes: {type: array, items: {type: object, additionalProperties: true}, description: 'Changed fields with `field`, `old` and `new` values.'}
+        user:
+          type: object
+          properties:
+            fullname: {type: string}
+            avatar: {type: [string, 'null']}
+        createdAt: {type: [string, 'null']}
+
+    Template:
+      type: object
+      required: [id, name, content]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        content: {type: object, additionalProperties: {type: string}, description: 'For `utm`: values by name (`source`, `medium`, `campaign`, `term`, `content`, `referral`, custom).'}
+        createdAt: {type: [string, 'null']}
+
+    EnabledGraphs:
+      type: object
+      description: Which graphs the public page shows. At least one must be true.
+      properties:
+        dailyTraffic: {type: boolean}
+        referrers: {type: boolean}
+        geo: {type: boolean}
+        technology: {type: boolean}
+        rulesStats: {type: boolean}
+        abVariantsStats: {type: boolean}
+        conversions: {type: boolean}
+        locales: {type: boolean}
+        clicksMap: {type: boolean}
+
+    ShareInput:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        enabledGraphs: {$ref: '#/components/schemas/EnabledGraphs'}
+
+    Share:
+      type: object
+      required: [id, linkId, name, enabledGraphs, token, url]
+      properties:
+        id: {type: string}
+        linkId: {type: string}
+        name: {type: string}
+        enabledGraphs: {$ref: '#/components/schemas/EnabledGraphs'}
+        token: {type: string}
+        url: {type: string, description: The public address of the statistics page.}
+        createdAt: {type: [string, 'null']}
+        updatedAt: {type: [string, 'null']}
+
+    ShareResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/Share'}
+
     IdResponse:
       type: object
       required: [data]
@@ -700,12 +926,23 @@ components:
         shareStats: {type: boolean}
         ogTitle: {type: string, maxLength: 255}
         ogDescription: {type: string, maxLength: 500}
+        ogImage: {type: [string, 'null'], format: uri, description: 'Social preview image. Upload it with `POST /files` and send the returned URL; an empty string or null removes it.'}
         appearanceColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
         useSystemColor: {type: boolean}
         useWorkspaceColor: {type: boolean}
-        qrColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
-        qrBgColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
-        qrShowLogo: {type: boolean}
+        qrSettings: {$ref: '#/components/schemas/QrSettings'}
+        qrColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$', description: 'Same as `qrSettings.color`; wins when both are sent.'}
+        qrBgColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$', description: 'Same as `qrSettings.bgColor`.'}
+        qrShowLogo: {type: boolean, description: 'Same as `qrSettings.useLogo`.'}
+
+    QrSettings:
+      type: object
+      description: The QR code of the link. Fields you leave out keep their value (defaults for a new link).
+      properties:
+        color: {type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Dots colour. Default `#000000`.}
+        bgColor: {type: string, pattern: '^#[0-9a-fA-F]{6}$', description: Background colour. Default `#ffffff`.}
+        useLogo: {type: boolean}
+        logo: {type: string, description: 'URL of an uploaded image (`POST /files`). An older link may hold a data URL here; it is returned as is. An empty string removes the logo.'}
 
     LinkCreate:
       allOf:
@@ -758,6 +995,16 @@ components:
         conversionTracking: {type: boolean}
         gpsTracking: {type: boolean}
         shareStats: {type: boolean}
+        ogTitle: {type: [string, 'null']}
+        ogDescription: {type: [string, 'null']}
+        ogImage: {type: [string, 'null'], description: URL of the social preview image.}
+        appearanceColor: {type: [string, 'null']}
+        useSystemColor: {type: boolean}
+        useWorkspaceColor: {type: boolean}
+        qrSettings:
+          oneOf:
+            - {$ref: '#/components/schemas/QrSettings'}
+            - {type: 'null'}
         createdAt: {type: [string, 'null']}
         updatedAt: {type: [string, 'null']}
 

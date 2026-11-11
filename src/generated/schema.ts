@@ -155,6 +155,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an image
+         * @description Needs `links:write`. One image (PNG, JPEG, GIF or HEIC, up to 10 MB), sent as `multipart/form-data` in the
+         *     `file` field. Returns the URL to use as `ogImage` or `qrSettings.logo`. The type is checked from the file's
+         *     contents. An image that is not attached to a link or workspace is removed by the daily cleanup, as on the web.
+         */
+        post: operations["uploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/links/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Change history of a link
+         * @description Needs `links:read`, a role that may view the history, and a plan that includes the change history. Newest first.
+         */
+        get: operations["getLinkActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Saved templates of the workspace
+         * @description Needs `links:read`. Only `type=utm` is supported: the workspace's UTM templates.
+         *
+         *     **How UTM values reach a link.** A UTM template's `content` holds values for `source`, `medium`, `campaign`,
+         *     `term`, `content`, `referral` and any custom names. Applying a template to a rule (or an A/B variant) rewrites its
+         *     destination URL: all existing `utm_*` parameters are removed, then every non-empty value is added as
+         *     `utm_<name>=<value>` (URL-encoded) to the query string. When the URL has a `#fragment`, the parameters are
+         *     appended to the fragment instead (`#section?utm_source=…`). Send the resulting URL as the rule's `targetUrl`
+         *     (or the variant's `url`).
+         */
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/links/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Public statistics pages of a link
+         * @description Needs `links:read` and a role that may view public statistics.
+         */
+        get: operations["listShares"];
+        put?: never;
+        /**
+         * Create a public statistics page
+         * @description Needs `links:write`. At least one graph must be enabled; rule and A/B breakdowns need a plan that includes them.
+         */
+        post: operations["createShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a public statistics page
+         * @description Needs `links:write`. The public URL stops working.
+         */
+        delete: operations["deleteShare"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a public statistics page
+         * @description Needs `links:write`. Send `name` and/or `enabledGraphs`.
+         */
+        patch: operations["updateShare"];
+        trace?: never;
+    };
     "/analytics": {
         parameters: {
             query?: never;
@@ -301,6 +424,61 @@ export interface components {
             limit: number;
             total: number;
         };
+        Activity: {
+            id: string;
+            /** @description What happened, e.g. `link_created`, `link_updated`, `public_share_created`. */
+            action: string;
+            subject?: string | null;
+            /** @description Changed fields with `field`, `old` and `new` values. */
+            changes?: {
+                [key: string]: unknown;
+            }[];
+            user: {
+                fullname?: string;
+                avatar?: string | null;
+            };
+            createdAt?: string | null;
+        };
+        Template: {
+            id: string;
+            name: string;
+            description?: string | null;
+            /** @description For `utm`: values by name (`source`, `medium`, `campaign`, `term`, `content`, `referral`, custom). */
+            content: {
+                [key: string]: string;
+            };
+            createdAt?: string | null;
+        };
+        /** @description Which graphs the public page shows. At least one must be true. */
+        EnabledGraphs: {
+            dailyTraffic?: boolean;
+            referrers?: boolean;
+            geo?: boolean;
+            technology?: boolean;
+            rulesStats?: boolean;
+            abVariantsStats?: boolean;
+            conversions?: boolean;
+            locales?: boolean;
+            clicksMap?: boolean;
+        };
+        ShareInput: {
+            name?: string;
+            enabledGraphs?: components["schemas"]["EnabledGraphs"];
+        };
+        Share: {
+            id: string;
+            linkId: string;
+            name: string;
+            enabledGraphs: components["schemas"]["EnabledGraphs"];
+            token: string;
+            /** @description The public address of the statistics page. */
+            url: string;
+            createdAt?: string | null;
+            updatedAt?: string | null;
+        };
+        ShareResponse: {
+            data: components["schemas"]["Share"];
+        };
         IdResponse: {
             data: {
                 id: string;
@@ -408,12 +586,31 @@ export interface components {
             shareStats?: boolean;
             ogTitle?: string;
             ogDescription?: string;
+            /**
+             * Format: uri
+             * @description Social preview image. Upload it with `POST /files` and send the returned URL; an empty string or null removes it.
+             */
+            ogImage?: string | null;
             appearanceColor?: string;
             useSystemColor?: boolean;
             useWorkspaceColor?: boolean;
+            qrSettings?: components["schemas"]["QrSettings"];
+            /** @description Same as `qrSettings.color`; wins when both are sent. */
             qrColor?: string;
+            /** @description Same as `qrSettings.bgColor`. */
             qrBgColor?: string;
+            /** @description Same as `qrSettings.useLogo`. */
             qrShowLogo?: boolean;
+        };
+        /** @description The QR code of the link. Fields you leave out keep their value (defaults for a new link). */
+        QrSettings: {
+            /** @description Dots colour. Default `#000000`. */
+            color?: string;
+            /** @description Background colour. Default `#ffffff`. */
+            bgColor?: string;
+            useLogo?: boolean;
+            /** @description URL of an uploaded image (`POST /files`). An older link may hold a data URL here; it is returned as is. An empty string removes the logo. */
+            logo?: string;
         };
         LinkCreate: components["schemas"]["LinkFields"] & {
             /**
@@ -455,6 +652,14 @@ export interface components {
             conversionTracking?: boolean;
             gpsTracking?: boolean;
             shareStats?: boolean;
+            ogTitle?: string | null;
+            ogDescription?: string | null;
+            /** @description URL of the social preview image. */
+            ogImage?: string | null;
+            appearanceColor?: string | null;
+            useSystemColor?: boolean;
+            useWorkspaceColor?: boolean;
+            qrSettings?: components["schemas"]["QrSettings"] | null;
             createdAt?: string | null;
             updatedAt?: string | null;
         };
@@ -911,6 +1116,195 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Uploaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uri */
+                            url: string;
+                        };
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getLinkActivity: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Activity"][];
+                        pagination: components["schemas"]["Pagination"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query: {
+                type: "utm";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Template"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Share"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareResponse"];
                 };
             };
             default: components["responses"]["Error"];

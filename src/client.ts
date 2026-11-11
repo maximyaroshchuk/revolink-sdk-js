@@ -1,6 +1,8 @@
 import {HttpClient, type RevolinkOptions} from './http';
 import {AnalyticsResource} from './resources/analytics';
 import {Domains} from './resources/domains';
+import {Files} from './resources/files';
+import {Templates} from './resources/templates';
 import {Links} from './resources/links';
 import {Tags} from './resources/tags';
 import type {Me, Workspace} from './types';
@@ -17,6 +19,8 @@ export class Revolink {
     readonly tags: Tags;
     readonly domains: Domains;
     readonly analytics: AnalyticsResource;
+    readonly files: Files;
+    readonly templates: Templates;
     private readonly http: HttpClient;
 
     constructor(options: RevolinkOptions) {
@@ -25,6 +29,8 @@ export class Revolink {
         this.tags = new Tags(this.http);
         this.domains = new Domains(this.http);
         this.analytics = new AnalyticsResource(this.http);
+        this.files = new Files(this.http);
+        this.templates = new Templates(this.http);
     }
 
     /**

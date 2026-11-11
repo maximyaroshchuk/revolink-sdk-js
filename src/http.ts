@@ -26,6 +26,8 @@ export type QueryValue = string | number | boolean | undefined | null | Array<st
 export interface RequestOptions {
     query?: Record<string, QueryValue>;
     body?: unknown;
+    /** A multipart upload. The Content-Type (with its boundary) is set by `fetch`, never by us. */
+    form?: FormData;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -70,9 +72,9 @@ export class HttpClient {
                 Authorization: `Bearer ${this.apiKey}`,
                 ...(this.workspaceId ? {'X-Workspace-Id': this.workspaceId} : {}),
                 Accept: 'application/json',
-                ...(options.body !== undefined ? {'Content-Type': 'application/json'} : {}),
+                ...(options.body !== undefined && !options.form ? {'Content-Type': 'application/json'} : {}),
             },
-            body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+            body: options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
         };
 
         for (let attempt = 0; ; attempt += 1) {

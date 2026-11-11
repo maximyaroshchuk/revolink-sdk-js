@@ -1,6 +1,7 @@
 import type {HttpClient} from '../http';
 import type {
-    BulkCreateResult, BulkDeleteResult, BulkUpdateResult, Link, LinkCreate, LinkSummary, LinkUpdate, ListLinksParams, Page,
+    Activity, BulkCreateResult, BulkDeleteResult, BulkUpdateResult, Link, LinkCreate, LinkSummary, LinkUpdate, ListLinksParams,
+    Page, Share, ShareInput,
 } from '../types';
 
 const MAX_PAGE_SIZE = 200;
@@ -59,6 +60,31 @@ export class Links {
     /** Permanent. Needs `links:delete`. */
     async delete(id: string): Promise<{id: string}> {
         return (await this.http.request<{data: {id: string}}>('DELETE', `/links/${enc(id)}`)).data;
+    }
+
+    /** Change history of a link, newest first. Needs `links:read` and a plan that includes the history. */
+    async activity(id: string, params: {page?: number; limit?: number} = {}): Promise<Page<Activity>> {
+        return this.http.request<Page<Activity>>('GET', `/links/${enc(id)}/activity`, {query: params});
+    }
+
+    /** Public statistics pages of a link. Needs `links:read`. */
+    async listShares(id: string): Promise<Share[]> {
+        return (await this.http.request<{data: Share[]}>('GET', `/links/${enc(id)}/shares`)).data;
+    }
+
+    /** At least one graph must be enabled. Needs `links:write`. */
+    async createShare(id: string, input: ShareInput): Promise<Share> {
+        return (await this.http.request<{data: Share}>('POST', `/links/${enc(id)}/shares`, {body: input})).data;
+    }
+
+    /** Send `name` and/or `enabledGraphs`. Needs `links:write`. */
+    async updateShare(shareId: string, input: ShareInput): Promise<Share> {
+        return (await this.http.request<{data: Share}>('PATCH', `/shares/${enc(shareId)}`, {body: input})).data;
+    }
+
+    /** The public URL stops working. Needs `links:write`. */
+    async deleteShare(shareId: string): Promise<{id: string}> {
+        return (await this.http.request<{data: {id: string}}>('DELETE', `/shares/${enc(shareId)}`)).data;
     }
 
     /** Up to 100 links in one request; one failing item does not stop the others. Needs `links:bulk`. */
